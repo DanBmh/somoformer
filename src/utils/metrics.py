@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+
 def VIM(GT, pred, dataset_name, mask):
     """
     Visibilty Ignored Metric
@@ -18,11 +19,11 @@ def VIM(GT, pred, dataset_name, mask):
     if dataset_name == "posetrack":
         mask = np.repeat(mask, 2, axis=-1)
         errorPose = np.power(gt_i_global - pred, 2) * mask
-        #get sum on joints and remove the effect of missing joints by averaging on visible joints
-        errorPose = np.sqrt(np.divide(np.sum(errorPose, 1), np.sum(mask,axis=1)))
+        # get sum on joints and remove the effect of missing joints by averaging on visible joints
+        errorPose = np.sqrt(np.divide(np.sum(errorPose, 1), np.sum(mask, axis=1)))
         where_are_NaNs = np.isnan(errorPose)
         errorPose[where_are_NaNs] = 0
-    else:   #3dpw
+    else:  # 3dpw
         errorPose = np.power(gt_i_global - pred, 2)
         errorPose = np.sum(errorPose, 1)
         errorPose = np.sqrt(errorPose)
@@ -62,11 +63,11 @@ def VAM(GT, pred, occ_cutoff, pred_visib):
                 if pred_visib[frame][j] == 0:
                     dist = occ_cutoff
                 elif pred_visib[frame][j] == 1:
-                    d = np.power(GT[frame][j:j + 2] - pred[frame][j:j + 2], 2)
+                    d = np.power(GT[frame][j : j + 2] - pred[frame][j : j + 2], 2)
                     d = np.sum(np.sqrt(d))
                     dist = min(occ_cutoff, d)
             f_err += dist
-        
+
         if N > 0:
             seq_err.append(f_err / N)
         else:
@@ -109,6 +110,7 @@ def keypoint_mse(output, target, mask=None):
 
     return mean_B
 
+
 def keypoint_mae(output, target, mask=None):
     """Implement 2D and 3D MAE loss
     Arguments:
@@ -136,12 +138,13 @@ def keypoint_mae(output, target, mask=None):
 
         valids = torch.sum(mask.squeeze(), dim=-1)
 
-    loss = torch.nn.SmoothL1Loss()(output*mask*1000, target*mask*1000)
-    #loss= torch.norm(output * mask - target * mask, p=1, dim=-1)
-    #mean_K = torch.sum(loss, dim=-1) / valids
-    #mean_B = torch.mean(mean_K)
+    loss = torch.nn.SmoothL1Loss()(output * mask * 1000, target * mask * 1000)
+    # loss= torch.norm(output * mask - target * mask, p=1, dim=-1)
+    # mean_K = torch.sum(loss, dim=-1) / valids
+    # mean_B = torch.mean(mean_K)
 
     return loss
+
 
 def bone_dist_mse(output, target):
     """
@@ -152,22 +155,36 @@ def bone_dist_mse(output, target):
     num_kps = output.shape[-2]
 
     if num_kps == 13:
-        kp_scheme = [(6, 0),
-                     (6, 1),
-                     (0, 2),
-                     (1, 3),
-                     (2, 4),
-                     (3, 5),
-                     (7, 9),
-                     (8, 10),
-                     (9, 11),
-                     (10, 12)]
-        
-        # (B, 1, len(kp_scheme))
-        gt_bone_dist = torch.stack([(target[:,:,joint_a] - target[:,:,joint_b]).norm(p=2, dim=2).mean(1) for (joint_a, joint_b) in kp_scheme], dim=-1).unsqueeze(1)
-        # (B, F, len(kp_scheme))
-        pred_bone_dists = torch.stack([(output[:,:,joint_a] - output[:,:,joint_b]).norm(p=2, dim=2) for (joint_a, joint_b) in kp_scheme], dim=-1)
+        kp_scheme = [
+            (6, 0),
+            (6, 1),
+            (0, 2),
+            (1, 3),
+            (2, 4),
+            (3, 5),
+            (7, 9),
+            (8, 10),
+            (9, 11),
+            (10, 12),
+        ]
 
-        joint_dist_loss = (pred_bone_dists - gt_bone_dist).norm(p=2,dim=2)
+        # (B, 1, len(kp_scheme))
+        gt_bone_dist = torch.stack(
+            [
+                (target[:, :, joint_a] - target[:, :, joint_b]).norm(p=2, dim=2).mean(1)
+                for (joint_a, joint_b) in kp_scheme
+            ],
+            dim=-1,
+        ).unsqueeze(1)
+        # (B, F, len(kp_scheme))
+        pred_bone_dists = torch.stack(
+            [
+                (output[:, :, joint_a] - output[:, :, joint_b]).norm(p=2, dim=2)
+                for (joint_a, joint_b) in kp_scheme
+            ],
+            dim=-1,
+        )
+
+        joint_dist_loss = (pred_bone_dists - gt_bone_dist).norm(p=2, dim=2)
 
     return joint_dist_loss.mean()
