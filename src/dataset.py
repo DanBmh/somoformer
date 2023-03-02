@@ -2,6 +2,7 @@ import copy
 import json
 import math
 import random
+import sys
 
 import numpy as np
 import torch
@@ -10,6 +11,9 @@ from torchvision import transforms
 
 from utils.data import load_data_3dpw_multiperson, load_data_somof
 from utils.utils import path_to_data
+
+sys.path.append("/PoseForecaster/")
+import utils_skelda
 
 
 def collate_batch(batch):
@@ -152,12 +156,19 @@ def getRandomRotatePoseTransform(config):
 
         angles = torch.deg2rad(torch.rand(B) * 360)
 
+        # rotation_matrix = torch.zeros(B, 3, 3).to(pose_seq.device)
+        # rotation_matrix[:, 1, 1] = 1
+        # rotation_matrix[:, 0, 0] = torch.cos(angles)
+        # rotation_matrix[:, 0, 2] = torch.sin(angles)
+        # rotation_matrix[:, 2, 0] = -torch.sin(angles)
+        # rotation_matrix[:, 2, 2] = torch.cos(angles)
+
         rotation_matrix = torch.zeros(B, 3, 3).to(pose_seq.device)
-        rotation_matrix[:, 1, 1] = 1
+        rotation_matrix[:, 2, 2] = 1
         rotation_matrix[:, 0, 0] = torch.cos(angles)
-        rotation_matrix[:, 0, 2] = torch.sin(angles)
-        rotation_matrix[:, 2, 0] = -torch.sin(angles)
-        rotation_matrix[:, 2, 2] = torch.cos(angles)
+        rotation_matrix[:, 0, 1] = torch.sin(angles)
+        rotation_matrix[:, 1, 0] = -torch.sin(angles)
+        rotation_matrix[:, 1, 1] = torch.cos(angles)
 
         rot_pose = torch.bmm(pose_seq.reshape(B, -1, 3).float(), rotation_matrix)
         rot_pose = rot_pose.reshape(pose_seq.shape)
@@ -331,13 +342,92 @@ class ThreeDPWDataset(MultiPersonPoseDataset):
             self.datalist.append(people)
 
 
+class SkeldaDataset(MultiPersonPoseDataset):
+    def __init__(self, **args):
+        self.datapath_save_out = "/datasets/tmp/human36m/{}_forecast_samples.json"
+        self.config = {
+            "item_step": 2,
+            "select_joints": [
+                "hip_middle",
+                "hip_right",
+                "knee_right",
+                "ankle_right",
+                # "middlefoot_right",
+                # "forefoot_right",
+                "hip_left",
+                "knee_left",
+                "ankle_left",
+                # "middlefoot_left",
+                # "forefoot_left",
+                # "spine_upper",
+                # "neck",
+                "nose",
+                # "head",
+                "shoulder_left",
+                "elbow_left",
+                "wrist_left",
+                # "hand_left",
+                # "thumb_left",
+                "shoulder_right",
+                "elbow_right",
+                "wrist_right",
+                # "hand_right",
+                # "thumb_right",
+                "shoulder_middle",
+            ],
+        }
+
+        super(SkeldaDataset, self).__init__("h36m", frequency=1, **args)
+
+    def load_data(self):
+
+        split = self.split
+        if self.split in ["val", "valid"]:
+            split = "eval"
+
+        path = self.datapath_save_out.format(split)
+        dataset = utils_skelda.load_json(path)
+
+        if "select_joints" in self.config:
+            # Optionally select only specific joints
+            joints_ids = [
+                dataset[0][0]["joints"].index(j) for j in self.config["select_joints"]
+            ]
+            for scene in dataset:
+                for item in scene:
+                    item["joints"] = [item["joints"][i] for i in joints_ids]
+                    item["bodies3D"] = [
+                        [item["bodies3D"][k][i] for i in joints_ids]
+                        for k in range(len(item["bodies3D"]))
+                    ]
+
+        self.datalist = []
+        for scene in dataset:
+            poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
+            masks = [np.ones(poses[0].shape[0]) for _ in scene]
+
+            # Take every other frame
+            poses = poses[:: self.config["item_step"]]
+            masks = masks[:: self.config["item_step"]]
+
+            people = [
+                (torch.from_numpy(np.array(poses)), torch.from_numpy(np.array(masks)))
+            ]
+
+            self.datalist.append(people)
+
+
 def create_dataset(dataset_name, logger, **args):
     logger.info("Loading dataset " + dataset_name)
 
     if dataset_name == "3dpw":
-        dataset = ThreeDPWDataset(**args)
+        # dataset = ThreeDPWDataset(**args)
+        dataset = SkeldaDataset(**args)
     elif dataset_name == "somof":
-        dataset = SoMoFDataset(**args)
+        # dataset = SoMoFDataset(**args)
+        dataset = SkeldaDataset(**args)
+    elif dataset_name == "skelda":
+        dataset = SkeldaDataset(**args)
     else:
         raise ValueError(f"Dataset with name '{dataset_name}' not found.")
 

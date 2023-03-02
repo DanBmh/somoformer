@@ -2,10 +2,14 @@ SEED: 0
 EXPERIMENT: 'default_experiment'
 TRAIN:
     batch_size: 128
-    epochs: 32
+    # epochs: 32
+    # epochs: 50
+    epochs: 100
     num_workers: 0
-    input_track_size: 16
-    output_track_size: 14
+    # input_track_size: 16
+    # output_track_size: 14
+    input_track_size: 50
+    output_track_size: 25
     lr: 0.0001
     lr_decay: 1
     lr_drop: true
@@ -16,7 +20,8 @@ TRAIN:
 DATA:
     joints: "somof"
     deltas: False # Whether to predict pose deltas instead of the pose itself
-    add_flips: True # Whether to add flipped sequences to dataset
+    # add_flips: True # Whether to add flipped sequences to dataset
+    add_flips: False # Whether to add flipped sequences to dataset
     segmented: False # Whether to segment data into 30-frame sequences. If false, take every possibly 30-frame sequence (so 30x more data)
     aug_rotate: true # Whether to randomly rotate sequences about y (vertical) axis
     aug_scale: false # Whether to randomly scale squences
@@ -24,8 +29,9 @@ DATA:
     train_datasets:
         - 3dpw
 MODEL:
-    num_kps: 13 # Somof has 13 keypoints
-    num_layers: 6 
+    # num_kps: 13 # Somof has 13 keypoints
+    num_kps: 15
+    num_layers: 6
     num_heads: 8
     dim_hidden: 256
     dim_feedforward: 1024

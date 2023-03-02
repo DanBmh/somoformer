@@ -1,7 +1,10 @@
 import argparse
+import sys
+import time
 
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 from progress.bar import Bar
 from torch.utils.data import DataLoader
 
@@ -9,6 +12,109 @@ from dataset import batch_process_joints, collate_batch, create_dataset
 from model import create_model
 from utils.metrics import VAM, VIM
 from utils.utils import AverageMeter, create_logger, load_default_config
+
+sys.path.append("/PoseForecaster/")
+import utils_pipeline
+
+# ==================================================================================================
+
+
+def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
+
+    # print(sequences_predict.shape)
+    # print(sequences_target.shape)
+    # print(sequences_input.shape)
+
+    sequences_input = sequences_input.cpu().numpy()
+    sequences_predict = sequences_predict.reshape(sequences_predict.shape[0], -1, 3)
+    sequences_target = sequences_target.reshape(sequences_target.shape[0], -1, 3)
+
+    # Convert to millimeters
+    sequences_input = sequences_input * 1000
+    sequences_target = sequences_target * 1000
+    sequences_predict = sequences_predict * 1000
+
+    # # Move to origin of last input pose
+    # sequences_target = sequences_target + sequences_input[-1][0]
+    # sequences_predict = sequences_predict + sequences_input[-1][0]
+
+    utils_pipeline.visualize_pose_trajectories(
+        sequences_input,
+        sequences_target,
+        sequences_predict,
+        [
+            "hip_middle",
+            "hip_right",
+            "knee_right",
+            "ankle_right",
+            "middlefoot_right",
+            "forefoot_right",
+            "hip_left",
+            "knee_left",
+            "ankle_left",
+            "middlefoot_left",
+            "forefoot_left",
+            "spine_upper",
+            "neck",
+            "nose",
+            "head",
+            "shoulder_left",
+            "elbow_left",
+            "wrist_left",
+            "hand_left",
+            "thumb_left",
+            "shoulder_right",
+            "elbow_right",
+            "wrist_right",
+            "hand_right",
+            "thumb_right",
+            "shoulder_middle",
+        ],
+        {"room_size": [3200, 4800, 2000], "room_center": [0, 0, 1000]},
+    )
+    plt.show()
+
+
+# ==================================================================================================
+
+
+def calc_mpjpe(sequences_predict, sequences_target):
+    sequences_predict = sequences_predict.reshape(sequences_predict.shape[0], -1, 3)
+    sequences_target = sequences_target.reshape(sequences_target.shape[0], -1, 3)
+
+    # Convert to millimeters
+    sequences_target = sequences_target * 1000
+    sequences_predict = sequences_predict * 1000
+
+    # Calculate loss
+    loss = np.sqrt(
+        np.sum(
+            (sequences_target - sequences_predict) ** 2,
+            axis=-1,
+        )
+    )
+    loss = np.mean(loss, axis=-1)
+    return loss
+
+
+# ==================================================================================================
+
+
+def repeat_last_timestep(input_array, num_future_timesteps):
+    nbatch, time_steps, human_joints, _ = input_array.shape
+    future_timesteps = np.zeros((nbatch, num_future_timesteps, human_joints, 3))
+
+    for i in range(nbatch):
+        for j in range(human_joints):
+            for coord in range(3):
+                future_timesteps[i, :, j, coord] = (
+                    np.ones(num_future_timesteps) * input_array[i, -1, j, coord]
+                )
+
+    return future_timesteps
+
+
+# ==================================================================================================
 
 
 def inference(model, config, input_joints, pelvis, padding_mask, out_len=14):
@@ -40,6 +146,7 @@ def evaluate_vim(
     bar = Bar(f"EVAL VIM", fill="#", max=len(dataloader))
 
     vim_avg = AverageMeter()
+    losses = []
 
     for i, batch in enumerate(dataloader):
         joints, masks, padding_mask = batch
@@ -69,6 +176,11 @@ def evaluate_vim(
         )  # (B, out_F, J*K)
         pred_masks = pred_masks.cpu().numpy()
 
+        # # Uncomment to use the last timestep as predictions
+        # pshape = pred_joints.shape
+        # pred_joints = repeat_last_timestep(in_joints.cpu().numpy(), out_F)
+        # pred_joints = pred_joints.reshape(pshape)
+
         for person in range(num_people):
             JK = out_joints.shape[2] // num_people
             K = out_joints.shape[-1] // pred_masks.shape[-1]
@@ -79,7 +191,7 @@ def evaluate_vim(
                     continue
 
                 person_out_joints = out_joints[k, :, JK * person : JK * (person + 1)]
-                assert person_out_joints.shape == (14, J * K)
+                # assert person_out_joints.shape == (14, J * K)
                 person_pred_joints = pred_joints[k, :, JK * person : JK * (person + 1)]
                 person_masks = pred_masks[k, :, J * person : J * (person + 1)]
                 if not vam:
@@ -110,6 +222,14 @@ def evaluate_vim(
                     vim_100 = vim_score[2]
                     vim_avg.update(vim_100, 1)
 
+                # viz_joints_3d(
+                #     person_pred_joints,
+                #     person_out_joints,
+                #     joints[k][0][: config["TRAIN"]["input_track_size"]],
+                # )
+                loss = calc_mpjpe(person_pred_joints, person_out_joints)
+                losses.append(loss)
+
         if return_all:
             vim_text = "[" + (", ".join(["%.2f" % vim for vim in vim_avg.avg])) + "]"
         else:
@@ -118,6 +238,10 @@ def evaluate_vim(
         bar.next()
 
     bar.finish()
+
+    print("Number of samples:", len(losses))
+    loss = np.mean(np.array(losses), axis=0)
+    print("Overall frame losses:", loss)
 
     return vim_avg.avg
 
@@ -252,8 +376,8 @@ if __name__ == "__main__":
         config["TRAIN"]["input_track_size"],
         config["TRAIN"]["output_track_size"],
     )
-    assert in_F == 16
-    assert out_F == 14
+    # assert in_F == 16
+    # assert out_F == 14
 
     if args.somof:
         logger.info("Using SOMOF data")
@@ -284,15 +408,18 @@ if __name__ == "__main__":
             split=args.split,
             track_size=(in_F + out_F),
             track_cutoff=in_F,
-            segmented=True,
+            # segmented=True,
+            segmented=False,
         )
         dataloader = DataLoader(
             dataset,
-            batch_size=config["TRAIN"]["batch_size"],
+            batch_size=1,
             num_workers=config["TRAIN"]["num_workers"],
             shuffle=False,
             collate_fn=collate_batch,
         )
+
+    stime = time.time()
 
     if args.metric == "vim":
         avgs = evaluate_vim(model, dataloader, config, logger, return_all=True)
@@ -301,15 +428,5 @@ if __name__ == "__main__":
     else:
         raise ValueError("Metric must be onf of (vim, mpjpe)")
 
-    idx_to_check = [1, 3, 7, 9, 13]
-    vim_100 = str(avgs[idx_to_check[0]])
-    vim_240 = str(avgs[idx_to_check[1]])
-    vim_500 = str(avgs[idx_to_check[2]])
-    vim_640 = str(avgs[idx_to_check[3]])
-    vim_900 = str(avgs[idx_to_check[4]])
-
-    print(f"100ms: {vim_100}")
-    print(f"240ms: {vim_240}")
-    print(f"500ms: {vim_500}")
-    print(f"640ms: {vim_640}")
-    print(f"900ms: {vim_900}")
+    ftime = time.time()
+    print("Testing took {} seconds".format(int(ftime - stime)))

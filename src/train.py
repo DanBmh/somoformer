@@ -363,21 +363,6 @@ def train(config, logger, experiment_name=""):
                     bar_prefix="SoMoF train",
                 )
                 writer_train.add_scalar(
-                    "VIM_100ms/somof", train_vim_somof[1], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_240ms/somof", train_vim_somof[3], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_500ms/somof", train_vim_somof[7], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_640ms/somof", train_vim_somof[9], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_900ms/somof", train_vim_somof[13], global_step
-                )
-                writer_train.add_scalar(
                     "VIM/somof", train_vim_somof.mean(), global_step
                 )
 
@@ -388,21 +373,6 @@ def train(config, logger, experiment_name=""):
                     logger,
                     return_all=True,
                     bar_prefix="SoMoF valid",
-                )
-                writer_valid.add_scalar(
-                    "VIM_100ms/somof", val_vim_somof[1], global_step
-                )
-                writer_valid.add_scalar(
-                    "VIM_240ms/somof", val_vim_somof[3], global_step
-                )
-                writer_valid.add_scalar(
-                    "VIM_500ms/somof", val_vim_somof[7], global_step
-                )
-                writer_valid.add_scalar(
-                    "VIM_640ms/somof", val_vim_somof[9], global_step
-                )
-                writer_valid.add_scalar(
-                    "VIM_900ms/somof", val_vim_somof[13], global_step
                 )
                 writer_valid.add_scalar("VIM/somof", val_vim_somof.mean(), global_step)
 
@@ -416,21 +386,6 @@ def train(config, logger, experiment_name=""):
                     return_all=True,
                     bar_prefix="3dpw train",
                 )
-                writer_train.add_scalar(
-                    "VIM_100ms/3dpw", train_vim_3dpw[1], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_240ms/3dpw", train_vim_3dpw[3], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_500ms/3dpw", train_vim_3dpw[7], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_640ms/3dpw", train_vim_3dpw[9], global_step
-                )
-                writer_train.add_scalar(
-                    "VIM_900ms/3dpw", train_vim_3dpw[13], global_step
-                )
                 writer_train.add_scalar("VIM/3dpw", train_vim_3dpw.mean(), global_step)
 
                 val_vim_3dpw = evaluate_vim(
@@ -441,11 +396,6 @@ def train(config, logger, experiment_name=""):
                     return_all=True,
                     bar_prefix="3dpw valid",
                 )
-                writer_valid.add_scalar("VIM_100ms/3dpw", val_vim_3dpw[1], global_step)
-                writer_valid.add_scalar("VIM_240ms/3dpw", val_vim_3dpw[3], global_step)
-                writer_valid.add_scalar("VIM_500ms/3dpw", val_vim_3dpw[7], global_step)
-                writer_valid.add_scalar("VIM_640ms/3dpw", val_vim_3dpw[9], global_step)
-                writer_valid.add_scalar("VIM_900ms/3dpw", val_vim_3dpw[13], global_step)
                 writer_valid.add_scalar("VIM/3dpw", val_vim_3dpw.mean(), global_step)
 
                 train_mpjpe_3dpw_joint = evaluate_mpjpe(
@@ -468,7 +418,7 @@ def train(config, logger, experiment_name=""):
                     config,
                     logger,
                     return_all=True,
-                    bar_prefix="3dpw train",
+                    bar_prefix="3dpw valid",
                     per_joint=True,
                 )
                 for i in range(len(train_mpjpe_3dpw_joint)):
@@ -528,4 +478,8 @@ if __name__ == "__main__":
     logger.info("Initializing with config:")
     logger.info(cfg)
 
+    stime = time.time()
     train(cfg, logger, experiment_name=args.exp_name)
+
+    ftime = time.time()
+    print("Training took {} seconds".format(int(ftime - stime)))
