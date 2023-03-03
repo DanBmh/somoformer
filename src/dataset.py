@@ -463,6 +463,9 @@ class SkeldaDataset(MultiPersonPoseDataset):
 
         self.datalist = []
         for scene in dataset:
+            if scene[0]["action"] != 14:
+                continue
+
             # poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
             poses = [np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene]
             masks = [np.ones(poses[0].shape[0]) for _ in scene]
@@ -470,6 +473,9 @@ class SkeldaDataset(MultiPersonPoseDataset):
             # Take every other frame
             poses = poses[:: self.config["item_step"]]
             masks = masks[:: self.config["item_step"]]
+
+            poses = poses[20:]
+            masks = masks[20:]
 
             people = [
                 (torch.from_numpy(np.array(poses)), torch.from_numpy(np.array(masks)))

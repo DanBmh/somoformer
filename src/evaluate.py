@@ -34,9 +34,11 @@ def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
     sequences_target = sequences_target * 1000
     sequences_predict = sequences_predict * 1000
 
-    # # Move to origin of last input pose
-    # sequences_target = sequences_target + sequences_input[-1][0]
-    # sequences_predict = sequences_predict + sequences_input[-1][0]
+    # Move to origin of last input pose
+    sequences_target = sequences_target - sequences_input[0][0] + sequences_input[-1][0]
+    sequences_predict = (
+        sequences_predict - sequences_input[0][0] + sequences_input[-1][0]
+    )
 
     utils_pipeline.visualize_pose_trajectories(
         sequences_input,
@@ -47,31 +49,35 @@ def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
             "hip_right",
             "knee_right",
             "ankle_right",
-            "middlefoot_right",
-            "forefoot_right",
+            # "middlefoot_right",
+            # "forefoot_right",
             "hip_left",
             "knee_left",
             "ankle_left",
-            "middlefoot_left",
-            "forefoot_left",
-            "spine_upper",
-            "neck",
+            # "middlefoot_left",
+            # "forefoot_left",
+            # "spine_upper",
+            # "neck",
             "nose",
-            "head",
+            # "head",
             "shoulder_left",
             "elbow_left",
             "wrist_left",
-            "hand_left",
-            "thumb_left",
+            # "hand_left",
+            # "thumb_left",
             "shoulder_right",
             "elbow_right",
             "wrist_right",
-            "hand_right",
-            "thumb_right",
+            # "hand_right",
+            # "thumb_right",
             "shoulder_middle",
         ],
-        {"room_size": [3200, 4800, 2000], "room_center": [0, 0, 1000]},
+        # {"room_size": [3200, 4800, 2000], "room_center": [0, 0, 1000]},
+        {},
     )
+
+    plt.grid(False)
+    plt.axis("off")
     plt.show()
 
 
@@ -222,11 +228,11 @@ def evaluate_vim(
                     vim_100 = vim_score[2]
                     vim_avg.update(vim_100, 1)
 
-                # viz_joints_3d(
-                #     person_pred_joints,
-                #     person_out_joints,
-                #     joints[k][0][: config["TRAIN"]["input_track_size"]],
-                # )
+                viz_joints_3d(
+                    person_pred_joints,
+                    person_out_joints,
+                    joints[k][0][: config["TRAIN"]["input_track_size"]],
+                )
                 loss = calc_mpjpe(person_pred_joints, person_out_joints)
                 losses.append(loss)
 
