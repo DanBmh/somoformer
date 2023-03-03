@@ -8,8 +8,16 @@ TRAIN:
     num_workers: 0
     # input_track_size: 16
     # output_track_size: 14
-    input_track_size: 50
-    output_track_size: 25
+    # input_track_size: 50
+    # output_track_size: 25
+    # input_track_size: 30
+    # output_track_size: 15
+    # input_track_size: 90
+    # output_track_size: 45
+    input_track_size: 20
+    output_track_size: 10
+    # input_track_size: 60
+    # output_track_size: 30
     lr: 0.0001
     lr_decay: 1
     lr_drop: true

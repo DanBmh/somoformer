@@ -136,7 +136,7 @@ def dataloader_for(dataset, config, **kwargs):
     )
 
 
-def train(config, logger, experiment_name=""):
+def train(config, logger, experiment_name="", args=None):
 
     ################################
     # Load data
@@ -231,6 +231,14 @@ def train(config, logger, experiment_name=""):
 
     num_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Model has {num_parameters} parameters.")
+
+    model.train()
+    model.cuda()
+
+    if args.model_weights_path != "":
+        print("Loading model weights from:", args.model_weights_path)
+        ckpt = torch.load(args.model_weights_path)
+        model.load_state_dict(ckpt["model"])
 
     ################################
     # Begin Training
@@ -452,6 +460,12 @@ if __name__ == "__main__":
         help="Config name. Otherwise will use default config",
     )
     parser.add_argument("--dry-run", action="store_true", help="Run just one iteration")
+    parser.add_argument(
+        "--model_weights_path",
+        type=str,
+        default="",
+        help="directory with the model weights to copy",
+    )
     args = parser.parse_args()
 
     if args.cfg != "":
@@ -479,7 +493,7 @@ if __name__ == "__main__":
     logger.info(cfg)
 
     stime = time.time()
-    train(cfg, logger, experiment_name=args.exp_name)
+    train(cfg, logger, experiment_name=args.exp_name, args=args)
 
     ftime = time.time()
     print("Training took {} seconds".format(int(ftime - stime)))

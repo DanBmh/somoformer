@@ -344,9 +344,10 @@ class ThreeDPWDataset(MultiPersonPoseDataset):
 
 class SkeldaDataset(MultiPersonPoseDataset):
     def __init__(self, **args):
-        self.datapath_save_out = "/datasets/tmp/human36m/{}_forecast_samples.json"
+        # self.datapath_save_out = "/datasets/tmp/human36m/{}_forecast_samples.json"
+        self.datapath_save_out = "/datasets/tmp/human36m/{}_forecast_kppspose.json"
         self.config = {
-            "item_step": 2,
+            "item_step": 5,
             "select_joints": [
                 "hip_middle",
                 "hip_right",
@@ -377,6 +378,47 @@ class SkeldaDataset(MultiPersonPoseDataset):
             ],
         }
 
+        # self.datapath_save_out = "/datasets/tmp/mocap/{}_forecast_samples.json"
+        # self.config = {
+        #     # "item_step": 2,
+        #     "item_step": 3,
+        #     "select_joints": [
+        #         "hip_middle",
+        #         # "spine_lower",
+        #         "hip_right",
+        #         "knee_right",
+        #         "ankle_right",
+        #         # "middlefoot_right",
+        #         # "forefoot_right",
+        #         "hip_left",
+        #         "knee_left",
+        #         "ankle_left",
+        #         # "middlefoot_left",
+        #         # "forefoot_left",
+        #         # "spine2",
+        #         # "spine3",
+        #         # "spine_upper",
+        #         # "neck",
+        #         # "head_lower",
+        #         "head_upper",
+        #         "shoulder_right",
+        #         "elbow_right",
+        #         "wrist_right",
+        #         # "hand_right1",
+        #         # "hand_right2",
+        #         # "hand_right3",
+        #         # "hand_right4",
+        #         "shoulder_left",
+        #         "elbow_left",
+        #         "wrist_left",
+        #         # "hand_left1",
+        #         # "hand_left2",
+        #         # "hand_left3",
+        #         # "hand_left4"
+        #         "shoulder_middle",
+        #     ],
+        # }
+
         super(SkeldaDataset, self).__init__("h36m", frequency=1, **args)
 
     def load_data(self):
@@ -384,6 +426,9 @@ class SkeldaDataset(MultiPersonPoseDataset):
         split = self.split
         if self.split in ["val", "valid"]:
             split = "eval"
+
+        if "mocap" in self.datapath_save_out and split == "eval":
+            split = "test"
 
         path = self.datapath_save_out.format(split)
         dataset = utils_skelda.load_json(path)
@@ -401,9 +446,25 @@ class SkeldaDataset(MultiPersonPoseDataset):
                         for k in range(len(item["bodies3D"]))
                     ]
 
+            if "prediction_joints" in dataset[0][0]:
+                joints_ids = [
+                    dataset[0][0]["prediction_joints"].index(j)
+                    for j in self.config["select_joints"]
+                ]
+                for scene in dataset:
+                    for item in scene:
+                        item["prediction_joints"] = [
+                            item["prediction_joints"][i] for i in joints_ids
+                        ]
+                        item["predictions"] = [
+                            [item["predictions"][k][i] for i in joints_ids]
+                            for k in range(len(item["predictions"]))
+                        ]
+
         self.datalist = []
         for scene in dataset:
-            poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
+            # poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
+            poses = [np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene]
             masks = [np.ones(poses[0].shape[0]) for _ in scene]
 
             # Take every other frame
