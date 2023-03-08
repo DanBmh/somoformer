@@ -18,6 +18,10 @@ import utils_pipeline
 
 # ==================================================================================================
 
+jloss_timestep = 9
+
+# ==================================================================================================
+
 
 def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
 
@@ -26,22 +30,17 @@ def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
     # print(sequences_input.shape)
 
     sequences_input = sequences_input.cpu().numpy()
-    sequences_predict = sequences_predict.reshape(sequences_predict.shape[0], -1, 3)
-    sequences_target = sequences_target.reshape(sequences_target.shape[0], -1, 3)
 
     # Convert to millimeters
     sequences_input = sequences_input * 1000
-    sequences_target = sequences_target * 1000
-    sequences_predict = sequences_predict * 1000
-
-    # Move to origin of last input pose
-    sequences_target = sequences_target + sequences_input[-1][0]
-    sequences_predict = sequences_predict + sequences_input[-1][0]
 
     utils_pipeline.visualize_pose_trajectories(
         sequences_input,
         sequences_target,
         sequences_predict,
+        # np.array([sequences_input[0]]),
+        # np.array([sequences_target[0]]),
+        # np.array([sequences_predict[0]]),
         [
             "hip_middle",
             "hip_right",
@@ -77,28 +76,6 @@ def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
     plt.grid(False)
     plt.axis("off")
     plt.show()
-
-
-# ==================================================================================================
-
-
-def calc_mpjpe(sequences_predict, sequences_target):
-    sequences_predict = sequences_predict.reshape(sequences_predict.shape[0], -1, 3)
-    sequences_target = sequences_target.reshape(sequences_target.shape[0], -1, 3)
-
-    # Convert to millimeters
-    sequences_target = sequences_target * 1000
-    sequences_predict = sequences_predict * 1000
-
-    # Calculate loss
-    loss = np.sqrt(
-        np.sum(
-            (sequences_target - sequences_predict) ** 2,
-            axis=-1,
-        )
-    )
-    loss = np.mean(loss, axis=-1)
-    return loss
 
 
 # ==================================================================================================
@@ -151,9 +128,11 @@ def evaluate_vim(
 
     vim_avg = AverageMeter()
     losses = []
+    joint_losses = np.zeros([config["MODEL"]["num_kps"]])
+    max_jlosses = np.zeros([config["MODEL"]["num_kps"]])
 
     for i, batch in enumerate(dataloader):
-        joints, masks, padding_mask = batch
+        joints, masks, padding_mask, preds = batch
 
         num_people = 1
         if len(joints.shape) == 5:
@@ -226,13 +205,50 @@ def evaluate_vim(
                     vim_100 = vim_score[2]
                     vim_avg.update(vim_100, 1)
 
+                # Convert to millimeters
+                person_out_joints = person_out_joints * 1000
+                person_pred_joints = person_pred_joints * 1000
+
+                person_out_joints = person_out_joints.reshape(
+                    1, person_out_joints.shape[0], -1, 3
+                )
+                person_pred_joints = person_pred_joints.reshape(
+                    1, person_pred_joints.shape[0], -1, 3
+                )
+
+                # Convert to global coordinates
+                last_input_pose = (
+                    joints[k][0][: config["TRAIN"]["input_track_size"]][-1]
+                    .cpu()
+                    .data.numpy()
+                    * 1000
+                )
+                person_pred_joints = utils_pipeline.make_absolute_with_last_input(
+                    person_pred_joints, last_input_pose
+                )
+                person_target_joints = (
+                    preds[k][0][config["TRAIN"]["input_track_size"] :]
+                    .cpu()
+                    .data.numpy()
+                    * 1000
+                )
+                person_target_joints = np.expand_dims(person_target_joints, axis=0)
+
                 # viz_joints_3d(
-                #     person_pred_joints,
-                #     person_out_joints,
+                #     person_pred_joints[0],
+                #     person_target_joints[0],
                 #     joints[k][0][: config["TRAIN"]["input_track_size"]],
                 # )
-                loss = calc_mpjpe(person_pred_joints, person_out_joints)
-                losses.append(loss)
+
+                loss = np.sqrt(
+                    np.sum((person_pred_joints - person_target_joints) ** 2, axis=-1)
+                )
+                floss = np.sum(np.mean(loss, axis=2), axis=0)
+                jloss = np.sum(loss[:, jloss_timestep, :], axis=0)
+                joint_losses += jloss
+                max_jlosses = np.maximum(max_jlosses, jloss)
+
+                losses.append(floss)
 
         if return_all:
             vim_text = "[" + (", ".join(["%.2f" % vim for vim in vim_avg.avg])) + "]"
@@ -242,6 +258,14 @@ def evaluate_vim(
         bar.next()
 
     bar.finish()
+
+    avg_jlosses = joint_losses / len(losses)
+    avg_jlosses = np.round(avg_jlosses).astype(int)
+    max_jlosses = np.round(max_jlosses).astype(int)
+    print(
+        "Averaged joint losses at timestep", jloss_timestep, "in mm are:", avg_jlosses
+    )
+    print("Maximum joint losses at timestep", jloss_timestep, "in mm are:", max_jlosses)
 
     print("Number of samples:", len(losses))
     loss = np.mean(np.array(losses), axis=0)

@@ -19,24 +19,28 @@ import utils_skelda
 def collate_batch(batch):
     joints_list = []
     masks_list = []
+    preds_list = []
     num_people_list = []
-    for joints, masks in batch:
+    for joints, masks, preds in batch:
         # Make sure first dimension is # people for single person case
         if len(joints.shape) == 3:
             joints = joints.unsqueeze(0)
             masks = masks.unsqueeze(0)
+            preds = preds.unsqueeze(0)
 
         joints_list.append(joints)
         masks_list.append(masks)
+        preds_list.append(preds)
         num_people_list.append(torch.zeros(joints.shape[0]))
 
     joints = pad_sequence(joints_list, batch_first=True)
     masks = pad_sequence(masks_list, batch_first=True)
+    preds = pad_sequence(preds_list, batch_first=True)
     padding_mask = pad_sequence(
         num_people_list, batch_first=True, padding_value=1
     ).bool()
 
-    return joints, masks, padding_mask
+    return joints, masks, padding_mask, preds
 
 
 def batch_process_joints(
@@ -231,11 +235,12 @@ class MultiPersonPoseDataset(torch.utils.data.Dataset):
                     for person in scene:
                         start_idx = j
                         end_idx = start_idx + self.track_size * self.frequency
-                        J_3D_real, J_3D_mask = (
+                        J_3D_real, J_3D_mask, J_3D_pred = (
                             person[0][start_idx : end_idx : self.frequency],
                             person[1][start_idx : end_idx : self.frequency],
+                            person[2][start_idx : end_idx : self.frequency],
                         )
-                        people.append((J_3D_real, J_3D_mask))
+                        people.append((J_3D_real, J_3D_mask, J_3D_pred))
                     tracks.append(people)
             self.datalist = tracks
 
@@ -246,10 +251,13 @@ class MultiPersonPoseDataset(torch.utils.data.Dataset):
             flipped_datalist = []
             for seq in self.datalist:
                 flipped_seq = []
-                for J_3D_real, J_3D_mask in seq:
+                for J_3D_real, J_3D_mask, J_3D_pred in seq:
                     J_3D_flipped = torch.flip(J_3D_real, dims=(0,)).clone()
+                    J_3D_pred_flipped = torch.flip(J_3D_pred, dims=(0,)).clone()
                     J_3D_mask_flipped = torch.flip(J_3D_mask, dims=(0,)).clone()
-                    flipped_seq.append((J_3D_flipped, J_3D_mask_flipped))
+                    flipped_seq.append(
+                        (J_3D_flipped, J_3D_mask_flipped, J_3D_pred_flipped)
+                    )
                 flipped_datalist.append(flipped_seq)
 
             self.datalist += flipped_datalist
@@ -292,16 +300,21 @@ class MultiPersonPoseDataset(torch.utils.data.Dataset):
                     frame_idx : frame_idx
                     + self.track_size * self.frequency : self.frequency
                 ]
+                J_3D_pred = person[2][
+                    frame_idx : frame_idx
+                    + self.track_size * self.frequency : self.frequency
+                ]
                 J_3D_mask = person[1][
                     frame_idx : frame_idx
                     + self.track_size * self.frequency : self.frequency
                 ]
-                scene.append((J_3D_real, J_3D_mask))
+                scene.append((J_3D_real, J_3D_mask, J_3D_pred))
 
         J_3D_real = torch.stack([s[0] for s in scene])
         J_3D_mask = torch.stack([s[1] for s in scene])
+        J_3D_pred = torch.stack([s[2] for s in scene])
 
-        return J_3D_real, J_3D_mask
+        return J_3D_real, J_3D_mask, J_3D_pred
 
 
 class SoMoFDataset(MultiPersonPoseDataset):
@@ -346,6 +359,8 @@ class ThreeDPWDataset(MultiPersonPoseDataset):
 
 class SkeldaDataset(MultiPersonPoseDataset):
     def __init__(self, **args):
+
+        self.datamode = "pred-gt"
 
         self.vis = False
         # self.vis = True
@@ -467,8 +482,14 @@ class SkeldaDataset(MultiPersonPoseDataset):
                 continue
 
             poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
-            # poses = [np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene]
             masks = [np.ones(poses[0].shape[0]) for _ in scene]
+
+            if "predictions" in scene[0]:
+                poses_pred = [
+                    np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene
+                ]
+            else:
+                poses_pred = poses
 
             if len(poses) < self.track_size:
                 continue
@@ -476,13 +497,31 @@ class SkeldaDataset(MultiPersonPoseDataset):
             # Take every other frame
             poses = poses[:: self.config["item_step"]]
             masks = masks[:: self.config["item_step"]]
+            poses_pred = poses_pred[:: self.config["item_step"]]
+
+            if self.datamode == "gt-gt":
+                poses_pred = poses
+
+            elif self.datamode == "pred-pred":
+                poses = poses_pred
+
+            elif self.datamode == "pred-gt":
+                tmp = poses
+                poses = poses_pred
+                poses_pred = tmp
 
             if self.vis:
-                poses = poses[20:]
-                masks = masks[20:]
+                sid = 20
+                poses = poses[sid:]
+                masks = masks[sid:]
+                poses_pred = poses_pred[sid:]
 
             people = [
-                (torch.from_numpy(np.array(poses)), torch.from_numpy(np.array(masks)))
+                (
+                    torch.from_numpy(np.array(poses)),
+                    torch.from_numpy(np.array(masks)),
+                    torch.from_numpy(np.array(poses_pred)),
+                )
             ]
 
             self.datalist.append(people)
