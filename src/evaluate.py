@@ -35,10 +35,8 @@ def viz_joints_3d(sequences_predict, sequences_target, sequences_input):
     sequences_predict = sequences_predict * 1000
 
     # Move to origin of last input pose
-    sequences_target = sequences_target - sequences_input[0][0] + sequences_input[-1][0]
-    sequences_predict = (
-        sequences_predict - sequences_input[0][0] + sequences_input[-1][0]
-    )
+    sequences_target = sequences_target + sequences_input[-1][0]
+    sequences_predict = sequences_predict + sequences_input[-1][0]
 
     utils_pipeline.visualize_pose_trajectories(
         sequences_input,
@@ -228,11 +226,11 @@ def evaluate_vim(
                     vim_100 = vim_score[2]
                     vim_avg.update(vim_100, 1)
 
-                viz_joints_3d(
-                    person_pred_joints,
-                    person_out_joints,
-                    joints[k][0][: config["TRAIN"]["input_track_size"]],
-                )
+                # viz_joints_3d(
+                #     person_pred_joints,
+                #     person_out_joints,
+                #     joints[k][0][: config["TRAIN"]["input_track_size"]],
+                # )
                 loss = calc_mpjpe(person_pred_joints, person_out_joints)
                 losses.append(loss)
 
@@ -409,7 +407,7 @@ if __name__ == "__main__":
 
     else:
         dataset = create_dataset(
-            "3dpw",
+            "skelda",
             logger,
             split=args.split,
             track_size=(in_F + out_F),

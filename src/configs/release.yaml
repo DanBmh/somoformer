@@ -3,8 +3,7 @@ EXPERIMENT: 'default_experiment'
 TRAIN:
     batch_size: 128
     # epochs: 32
-    # epochs: 50
-    epochs: 100
+    epochs: 50
     num_workers: 0
     # input_track_size: 16
     # output_track_size: 14
@@ -26,16 +25,16 @@ TRAIN:
     optimizer: "adam"
     max_grad_norm: 1.0
 DATA:
-    joints: "somof"
+    # joints: "somof"
+    joints: ""
     deltas: False # Whether to predict pose deltas instead of the pose itself
-    # add_flips: True # Whether to add flipped sequences to dataset
-    add_flips: False # Whether to add flipped sequences to dataset
+    add_flips: True # Whether to add flipped sequences to dataset
     segmented: False # Whether to segment data into 30-frame sequences. If false, take every possibly 30-frame sequence (so 30x more data)
     aug_rotate: true # Whether to randomly rotate sequences about y (vertical) axis
     aug_scale: false # Whether to randomly scale squences
     aug_permute: True
     train_datasets:
-        - 3dpw
+        - skelda
 MODEL:
     # num_kps: 13 # Somof has 13 keypoints
     num_kps: 15
@@ -46,6 +45,7 @@ MODEL:
     type: "somoformer"
     eval_single: false
     dct_n: 30
+    # dct_n: 10
     location_method: "grid"
     grid_len: 3
     grid_emb_size: 8

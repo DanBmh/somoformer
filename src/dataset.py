@@ -52,21 +52,23 @@ def batch_process_joints(
     in_F = config["TRAIN"]["input_track_size"]
 
     if multiperson:
-        if (
-            config["DATA"]["joints"] == "somof"
-            or config["DATA"]["joints"] == "posetrack"
-        ):
-            in_joints_pelvis = joints[:, :, (in_F - 1) : in_F, 6:7, :].clone()
-        elif config["DATA"]["joints"] == "cmu":
-            in_joints_pelvis = joints[:, :, (in_F - 1) : in_F, 12:13, :].clone()
+        # if (
+        #     config["DATA"]["joints"] == "somof"
+        #     or config["DATA"]["joints"] == "posetrack"
+        # ):
+        #     in_joints_pelvis = joints[:, :, (in_F - 1) : in_F, 6:7, :].clone()
+        # elif config["DATA"]["joints"] == "cmu":
+        #     in_joints_pelvis = joints[:, :, (in_F - 1) : in_F, 12:13, :].clone()
+        in_joints_pelvis = joints[:, :, (in_F - 1) : in_F, 0:1, :].clone()
     else:
-        if (
-            config["DATA"]["joints"] == "somof"
-            or config["DATA"]["joints"] == "posetrack"
-        ):
-            in_joints_pelvis = joints[:, (in_F - 1) : in_F, 6:7, :].clone()
-        else:
-            in_joints_pelvis = torch.zeros_like(in_joints_pelvis)
+        # if (
+        #     config["DATA"]["joints"] == "somof"
+        #     or config["DATA"]["joints"] == "posetrack"
+        # ):
+        #     in_joints_pelvis = joints[:, (in_F - 1) : in_F, 6:7, :].clone()
+        # else:
+        #     in_joints_pelvis = torch.zeros_like(in_joints_pelvis)
+        in_joints_pelvis = joints[:, (in_F - 1) : in_F, 0:1, :].clone()
 
     joints -= in_joints_pelvis
 
@@ -344,82 +346,84 @@ class ThreeDPWDataset(MultiPersonPoseDataset):
 
 class SkeldaDataset(MultiPersonPoseDataset):
     def __init__(self, **args):
-        # self.datapath_save_out = "/datasets/tmp/human36m/{}_forecast_samples.json"
-        self.datapath_save_out = "/datasets/tmp/human36m/{}_forecast_kppspose.json"
+
+        self.vis = False
+        # self.vis = True
+
         self.config = {
-            "item_step": 5,
+            "item_step": 1,
+            # "item_step": 2,
             "select_joints": [
                 "hip_middle",
                 "hip_right",
                 "knee_right",
                 "ankle_right",
-                # "middlefoot_right",
-                # "forefoot_right",
                 "hip_left",
                 "knee_left",
                 "ankle_left",
-                # "middlefoot_left",
-                # "forefoot_left",
-                # "spine_upper",
-                # "neck",
                 "nose",
-                # "head",
                 "shoulder_left",
                 "elbow_left",
                 "wrist_left",
-                # "hand_left",
-                # "thumb_left",
                 "shoulder_right",
                 "elbow_right",
                 "wrist_right",
-                # "hand_right",
-                # "thumb_right",
                 "shoulder_middle",
             ],
         }
 
-        # self.datapath_save_out = "/datasets/tmp/mocap/{}_forecast_samples.json"
-        # self.config = {
-        #     # "item_step": 2,
-        #     "item_step": 3,
-        #     "select_joints": [
-        #         "hip_middle",
-        #         # "spine_lower",
-        #         "hip_right",
-        #         "knee_right",
-        #         "ankle_right",
-        #         # "middlefoot_right",
-        #         # "forefoot_right",
-        #         "hip_left",
-        #         "knee_left",
-        #         "ankle_left",
-        #         # "middlefoot_left",
-        #         # "forefoot_left",
-        #         # "spine2",
-        #         # "spine3",
-        #         # "spine_upper",
-        #         # "neck",
-        #         # "head_lower",
-        #         "head_upper",
-        #         "shoulder_right",
-        #         "elbow_right",
-        #         "wrist_right",
-        #         # "hand_right1",
-        #         # "hand_right2",
-        #         # "hand_right3",
-        #         # "hand_right4",
-        #         "shoulder_left",
-        #         "elbow_left",
-        #         "wrist_left",
-        #         # "hand_left1",
-        #         # "hand_left2",
-        #         # "hand_left3",
-        #         # "hand_left4"
-        #         "shoulder_middle",
-        #     ],
-        # }
+        # self.datasets_train = [
+        #     "/datasets/preprocessed/mocap/train_forecast_samples_10fps.json",
+        #     "/datasets/preprocessed/amass/bmlmovi_train_forecast_samples_10fps.json",
+        #     "/datasets/preprocessed/amass/bmlrub_train_forecast_samples_10fps.json",
+        #     "/datasets/preprocessed/amass/kit_train_forecast_samples_10fps.json",
+        # ]
+        # self.datasets_train = [
+        #     "/datasets/preprocessed/human36m/train_forecast_kppspose.json",
+        #     # "/datasets/preprocessed/mocap/train_forecast_samples.json",
+        # ]
+        self.datasets_train = [
+            "/datasets/preprocessed/human36m/train_forecast_kppspose_10fps.json",
+        ]
+
+        # self.dataset_eval_test = "/datasets/preprocessed/human36m/{}_forecast_kppspose.json"
+        # self.dataset_eval_test = "/datasets/preprocessed/mocap/{}_forecast_samples.json"
+        self.dataset_eval_test = (
+            "/datasets/preprocessed/human36m/{}_forecast_kppspose_10fps.json"
+        )
+        # self.dataset_eval_test = "/datasets/preprocessed/mocap/{}_forecast_samples_10fps.json"
 
         super(SkeldaDataset, self).__init__("h36m", frequency=1, **args)
+
+    def filter_dataset(self, dataset, config):
+
+        if "select_joints" in config:
+            # Optionally select only specific joints
+            joints_ids = [dataset["joints"].index(j) for j in config["select_joints"]]
+            dataset["joints"] = [dataset["joints"][i] for i in joints_ids]
+
+            for scene in dataset["sequences"]:
+                for item in scene:
+                    item["bodies3D"] = [
+                        [item["bodies3D"][k][i] for i in joints_ids]
+                        for k in range(len(item["bodies3D"]))
+                    ]
+
+            if "prediction_joints" in dataset:
+                joints_ids = [
+                    dataset["prediction_joints"].index(j)
+                    for j in config["select_joints"]
+                ]
+                dataset["prediction_joints"] = [
+                    dataset["prediction_joints"][i] for i in joints_ids
+                ]
+
+                for scene in dataset["sequences"]:
+                    for item in scene:
+                        item["predictions"] = [
+                            [item["predictions"][k][i] for i in joints_ids]
+                            for k in range(len(item["predictions"]))
+                        ]
 
     def load_data(self):
 
@@ -427,55 +431,55 @@ class SkeldaDataset(MultiPersonPoseDataset):
         if self.split in ["val", "valid"]:
             split = "eval"
 
-        if "mocap" in self.datapath_save_out and split == "eval":
+        if "mocap" in self.dataset_eval_test and split == "eval":
             split = "test"
 
-        path = self.datapath_save_out.format(split)
-        dataset = utils_skelda.load_json(path)
+        if split in ["eval", "test"]:
+            path = self.dataset_eval_test.format(split)
+            dataset = utils_skelda.load_json(path)
 
-        if "select_joints" in self.config:
-            # Optionally select only specific joints
-            joints_ids = [
-                dataset[0][0]["joints"].index(j) for j in self.config["select_joints"]
-            ]
-            for scene in dataset:
-                for item in scene:
-                    item["joints"] = [item["joints"][i] for i in joints_ids]
-                    item["bodies3D"] = [
-                        [item["bodies3D"][k][i] for i in joints_ids]
-                        for k in range(len(item["bodies3D"]))
-                    ]
+            cfg = copy.deepcopy(self.config)
+            if "mocap" in path:
+                cfg["select_joints"][cfg["select_joints"].index("nose")] = "head_upper"
 
-            if "prediction_joints" in dataset[0][0]:
-                joints_ids = [
-                    dataset[0][0]["prediction_joints"].index(j)
-                    for j in self.config["select_joints"]
-                ]
-                for scene in dataset:
-                    for item in scene:
-                        item["prediction_joints"] = [
-                            item["prediction_joints"][i] for i in joints_ids
-                        ]
-                        item["predictions"] = [
-                            [item["predictions"][k][i] for i in joints_ids]
-                            for k in range(len(item["predictions"]))
-                        ]
+            self.filter_dataset(dataset, cfg)
+            dataset = dataset["sequences"]
+
+        else:
+            dataset = []
+            for dp in self.datasets_train:
+                ds = utils_skelda.load_json(dp)
+
+                cfg = copy.deepcopy(self.config)
+                if "mocap" in dp:
+                    cfg["select_joints"][
+                        cfg["select_joints"].index("nose")
+                    ] = "head_upper"
+
+                self.filter_dataset(ds, cfg)
+                dataset.extend(ds["sequences"])
+
+        print("Using {} sequences".format(len(dataset)))
 
         self.datalist = []
         for scene in dataset:
-            if scene[0]["action"] != 14:
+            if self.vis and scene[0]["action"] != 14:
                 continue
 
-            # poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
-            poses = [np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene]
+            poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
+            # poses = [np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene]
             masks = [np.ones(poses[0].shape[0]) for _ in scene]
+
+            if len(poses) < self.track_size:
+                continue
 
             # Take every other frame
             poses = poses[:: self.config["item_step"]]
             masks = masks[:: self.config["item_step"]]
 
-            poses = poses[20:]
-            masks = masks[20:]
+            if self.vis:
+                poses = poses[20:]
+                masks = masks[20:]
 
             people = [
                 (torch.from_numpy(np.array(poses)), torch.from_numpy(np.array(masks)))

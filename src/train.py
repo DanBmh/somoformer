@@ -147,6 +147,16 @@ def train(config, logger, experiment_name="", args=None):
         config["TRAIN"]["output_track_size"],
     )
 
+    dataset_val = create_dataset(
+        "skelda",
+        logger,
+        split="val",
+        track_size=(in_F + out_F),
+        track_cutoff=in_F,
+        segmented=False,
+    )
+    dataloader_val = dataloader_for(dataset_val, config, shuffle=True, pin_memory=True)
+
     dataset_train = ConcatDataset(
         get_datasets(config["DATA"]["train_datasets"], config, logger)
     )
@@ -179,8 +189,6 @@ def train(config, logger, experiment_name="", args=None):
         dataloader_3dpw_val = dataloader_for(
             dataset_3dpw_val, config, shuffle=True, pin_memory=True
         )
-
-        dataloader_val = dataloader_3dpw_val
 
         # SoMoF datasets for training-time VIM metrics
         dataset_somof_train = create_dataset(
@@ -244,6 +252,7 @@ def train(config, logger, experiment_name="", args=None):
     # Begin Training
     ################################
     global_step = 0
+    best_val_loss = np.inf
 
     for epoch in range(config["TRAIN"]["epochs"]):
 
@@ -434,14 +443,33 @@ def train(config, logger, experiment_name="", args=None):
                         f"MPJPE/3dpw/j_{i}", val_mpjpe_3dpw_joint[i], global_step
                     )
 
+        val_vim_3dpw = evaluate_vim(
+            model,
+            dataloader_val,
+            config,
+            logger,
+            return_all=True,
+            bar_prefix="valid",
+        )
+        writer_valid.add_scalar("VIM/3dpw", val_vim_3dpw.mean(), global_step)
+
         val_loss = evaluate_loss(model, dataloader_val, config)
         writer_valid.add_scalar("loss", val_loss, global_step)
 
         if cfg["dry_run"]:
             break
 
+        if val_loss < best_val_loss:
+            print("Saving new best model...")
+            best_val_loss = val_loss
+            save_checkpoint(
+                model, optimizer, epoch, config, "checkpoint-best.pth.tar", logger
+            )
+
     if not cfg["dry_run"]:
         save_checkpoint(model, optimizer, epoch, config, "checkpoint.pth.tar", logger)
+
+    print("Best validation loss:", best_val_loss)
     logger.info("All done.")
 
 
