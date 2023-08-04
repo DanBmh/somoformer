@@ -26,7 +26,7 @@ def evaluate_loss(model, dataloader, config):
     with torch.no_grad():
         for i in range(len(dataloader)):
             try:
-                joints, masks, padding_mask = next(dataiter)
+                joints, masks, padding_mask, _ = next(dataiter)
             except StopIteration:
                 break
 
@@ -287,10 +287,10 @@ def train(config, logger, experiment_name="", args=None):
             start = time.time()
 
             try:
-                joints, masks, padding_mask = next(dataiter)
+                joints, masks, padding_mask, _ = next(dataiter)
             except StopIteration:
                 dataiter = iter(dataloader_train)
-                joints, masks, padding_mask = next(dataiter)
+                joints, masks, padding_mask, _ = next(dataiter)
             (
                 in_joints,
                 in_masks,

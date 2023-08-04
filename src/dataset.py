@@ -102,6 +102,12 @@ def batch_process_joints(
     in_masks = masks[:, :in_F].float()
     out_masks = masks[:, in_F : in_F + out_F].float()
 
+    if training:
+        if config["DATA"]["aug_noise"]:
+            noise = torch.normal(mean=torch.zeros_like(in_joints), std=0.050)
+            noise = torch.clip(noise, -0.200, 0.200)
+            in_joints = in_joints + noise
+
     return (
         in_joints,
         in_masks,
@@ -360,7 +366,9 @@ class ThreeDPWDataset(MultiPersonPoseDataset):
 class SkeldaDataset(MultiPersonPoseDataset):
     def __init__(self, **args):
 
+        # self.datamode = "pred-pred"
         self.datamode = "pred-gt"
+        # self.datamode = "gt-gt"
 
         self.vis = False
         # self.vis = True

@@ -33,6 +33,8 @@ DATA:
     aug_rotate: true # Whether to randomly rotate sequences about y (vertical) axis
     aug_scale: false # Whether to randomly scale squences
     aug_permute: True
+    # aug_noise: True
+    aug_noise: False
     train_datasets:
         - skelda
 MODEL:
