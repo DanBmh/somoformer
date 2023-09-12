@@ -13,7 +13,7 @@ from model import create_model
 from utils.metrics import VAM, VIM
 from utils.utils import AverageMeter, create_logger, load_default_config
 
-sys.path.append("/PoseForecaster/")
+sys.path.append("/PoseForecasters/")
 import utils_pipeline
 
 # ==================================================================================================

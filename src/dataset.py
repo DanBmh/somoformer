@@ -12,7 +12,7 @@ from torchvision import transforms
 from utils.data import load_data_3dpw_multiperson, load_data_somof
 from utils.utils import path_to_data
 
-sys.path.append("/PoseForecaster/")
+sys.path.append("/PoseForecasters/")
 import utils_skelda
 
 
