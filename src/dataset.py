@@ -366,55 +366,42 @@ class ThreeDPWDataset(MultiPersonPoseDataset):
 class SkeldaDataset(MultiPersonPoseDataset):
     def __init__(self, **args):
 
+        self.datamode = "gt-gt"
         # self.datamode = "pred-pred"
-        self.datamode = "pred-gt"
-        # self.datamode = "gt-gt"
 
         self.vis = False
         # self.vis = True
 
-        self.config = {
-            "item_step": 1,
-            # "item_step": 2,
+        config = {
+            "item_step": 2,
+            "window_step": 2,
+            # "item_step": 1,
+            # "window_step": 1,
             "select_joints": [
-                "hip_middle",
                 "hip_right",
-                "knee_right",
-                "ankle_right",
                 "hip_left",
+                "knee_right",
                 "knee_left",
+                "ankle_right",
                 "ankle_left",
                 "nose",
-                "shoulder_left",
-                "elbow_left",
-                "wrist_left",
                 "shoulder_right",
+                "shoulder_left",
                 "elbow_right",
+                "elbow_left",
                 "wrist_right",
-                "shoulder_middle",
+                "wrist_left",
             ],
         }
 
-        # self.datasets_train = [
-        #     "/datasets/preprocessed/mocap/train_forecast_samples_10fps.json",
-        #     "/datasets/preprocessed/amass/bmlmovi_train_forecast_samples_10fps.json",
-        #     "/datasets/preprocessed/amass/bmlrub_train_forecast_samples_10fps.json",
-        #     "/datasets/preprocessed/amass/kit_train_forecast_samples_10fps.json",
-        # ]
-        # self.datasets_train = [
-        #     "/datasets/preprocessed/human36m/train_forecast_kppspose.json",
-        #     # "/datasets/preprocessed/mocap/train_forecast_samples.json",
-        # ]
-        self.datasets_train = [
-            "/datasets/preprocessed/human36m/train_forecast_kppspose_10fps.json",
+        datasets_train = [
+            "/datasets/preprocessed/human36m/train_forecast_rpt.json",
         ]
+        dataset_eval_test = "/datasets/preprocessed/human36m/{}_forecast_rpt.json"
 
-        # self.dataset_eval_test = "/datasets/preprocessed/human36m/{}_forecast_kppspose.json"
-        # self.dataset_eval_test = "/datasets/preprocessed/mocap/{}_forecast_samples.json"
-        self.dataset_eval_test = (
-            "/datasets/preprocessed/human36m/{}_forecast_kppspose_10fps.json"
-        )
-        # self.dataset_eval_test = "/datasets/preprocessed/mocap/{}_forecast_samples_10fps.json"
+        self.config = config
+        self.datasets_train = datasets_train
+        self.dataset_eval_test = dataset_eval_test
 
         super(SkeldaDataset, self).__init__("h36m", frequency=1, **args)
 
@@ -461,6 +448,11 @@ class SkeldaDataset(MultiPersonPoseDataset):
             path = self.dataset_eval_test.format(split)
             dataset = utils_skelda.load_json(path)
 
+            # Replace synonyms
+            dataset["joints"] = [
+                j.split("->")[1] if "->" in j else j for j in dataset["joints"]
+            ]
+
             cfg = copy.deepcopy(self.config)
             if "mocap" in path:
                 cfg["select_joints"][cfg["select_joints"].index("nose")] = "head_upper"
@@ -472,6 +464,11 @@ class SkeldaDataset(MultiPersonPoseDataset):
             dataset = []
             for dp in self.datasets_train:
                 ds = utils_skelda.load_json(dp)
+
+                # Replace synonyms
+                ds["joints"] = [
+                    j.split("->")[1] if "->" in j else j for j in ds["joints"]
+                ]
 
                 cfg = copy.deepcopy(self.config)
                 if "mocap" in dp:
@@ -489,12 +486,12 @@ class SkeldaDataset(MultiPersonPoseDataset):
             if self.vis and scene[0]["action"] != 14:
                 continue
 
-            poses = [np.array(item["bodies3D"][0])[:, 0:3] / 1000 for item in scene]
+            poses = [np.array(item["bodies3D"][0])[:, 0:3] for item in scene]
             masks = [np.ones(poses[0].shape[0]) for _ in scene]
 
             if "predictions" in scene[0]:
                 poses_pred = [
-                    np.array(item["predictions"][0])[:, 0:3] / 1000 for item in scene
+                    np.array(item["predictions"][0])[:, 0:3] for item in scene
                 ]
             else:
                 poses_pred = poses
